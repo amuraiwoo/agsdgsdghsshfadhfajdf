@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>非通知</title>
+    
+    <style>
+        /* リセットと基本設定 */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f0f0f0; 
+        }
+        
+        .screen-container {
+            width: 100vw; 
+            height: 100vh; 
+            background-color: #2c2c2e; 
+            position: fixed; 
+            top: 0;
+            left: 0;
+            z-index: 9999; 
+            overflow: hidden;
+            color: #fff;
+            opacity: 1;
+            visibility: visible;
+            transition: opacity 0.5s ease, visibility 0.5s ease; 
+        }
+
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .status-bar span:first-child, .status-bar span:last-child {
+            visibility: hidden; 
+        }
+
+        .main-content {
+            text-align: center;
+            padding-top: 50px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .title {
+            font-size: 24px;
+            font-weight: 400; 
+            margin-top: 100px;
+            letter-spacing: 0.1em;
+        }
+
+        .action-bar {
+            position: absolute;
+            bottom: 50px; 
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            z-index: 20;
+        }
+
+        .action-button {
+            display: flex;
+            align-items: center;
+            width: 70%; 
+            max-width: 300px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.15); 
+            border-radius: 30px; 
+            user-select: none;
+            
+            backdrop-filter: blur(8px); 
+            -webkit-backdrop-filter: blur(8px);
+            
+            position: relative; 
+            padding: 0 5px; 
+        }
+        
+        .slide-text {
+            flex-grow: 1;
+            text-align: left;
+            padding-left: 20px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 500;
+            transition: opacity 0.2s ease, transform 0.2s ease; 
+
+            transform: translateX(40px); 
+        }
+
+        .answer-icon {
+            width: 50px;
+            height: 50px;
+            background-color: #4cd964; 
+            border-radius: 50%; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-shrink: 0;
+            
+            cursor: grab;
+            position: absolute; 
+            left: 5px; 
+            top: 5px; 
+            z-index: 1;
+            
+            transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .background-blur-effect {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; 
+            z-index: 5;
+            
+            background: radial-gradient(
+                circle at 20% 80%, 
+                rgba(0, 0, 0, 0.6) 0%, 
+                rgba(0, 0, 0, 0.2) 40%, 
+                transparent 70% 
+            );
+        }
+    </style>
+</head>
+<body>
+
+    <audio id="ringtone" loop>
+        <source src="ringtone.mp3" type="audio/mp3">
+        お使いのブラウザは音声再生に対応していません。
+    </audio>
+
+    <div class="screen-container" id="calling-screen">
+        <div class="status-bar">
+            <span></span>
+            <span id="current-time">18:30</span> 
+            <span></span>
+        </div>
+
+        <div class="main-content">
+            <h1 class="title">非通知設定</h1>
+            <div class="background-blur-effect"></div>
+        </div>
+
+        <div class="action-bar">
+            <div class="action-button" id="slide-area">
+                <div class="answer-icon" id="drag-handle">
+                    <svg viewBox="0 0 24 24" fill="white" width="24px" height="24px">
+                        <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.32.57 3.57.57.55 0 1 .45 1 1v3.5c0 .55-.45 1-1 1C12.37 22 2 11.63 2 4c0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+                    </svg>
+                </div>
+                <span class="slide-text" id="slide-text">スライドで応答</span>
+            </div>
+        </div>
+    </div>
+    
+    <div style="padding: 50px; text-align: center; color: #333;">
+        <h2>驚いた方へ</h2>
+        <p>（これはドッキリです）</p>
+    </div>
+
+    <script>
+        function updateTime() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('current-time').textContent = hours + ':' + minutes;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const screen = document.getElementById('calling-screen');
+            const slideArea = document.getElementById('slide-area');
+            const dragHandle = document.getElementById('drag-handle');
+            const slideText = document.getElementById('slide-text');
+            const ringtone = document.getElementById('ringtone'); 
+
+            let isDragging = false;
+            let startX = 0;
+            let currentX = 0;
+            let isRinging = false;
+            
+            const initialTextShift = 40; 
+            const iconPadding = 5; 
+
+            updateTime();
+            setInterval(updateTime, 1000); 
+
+            // --- 【重要修正】音を鳴らすロジック ---
+            
+            // ページ読み込み完了後、すぐに再生を試みる関数
+            function startRingingImmediately() {
+                if (isRinging) return;
+                
+                // ページを開いた瞬間にplay()を呼び出す
+                ringtone.play().then(() => {
+                    isRinging = true;
+                    console.log("着信音の再生を開始しました。");
+                }).catch(error => {
+                    // 自動再生がブロックされた場合、コンソールにメッセージを表示
+                    console.log("自動再生がブラウザにブロックされました。ユーザー操作が必要です。");
+                    // ブロックされた場合は、手動再生のためのリスナーを再設定
+                    screen.addEventListener('click', startRingingOnInteraction, { once: true });
+                    screen.addEventListener('touchstart', startRingingOnInteraction, { once: true });
+                });
+            }
+
+            // ユーザー操作時に再生を試みる関数
+            function startRingingOnInteraction() {
+                ringtone.play().then(() => {
+                    isRinging = true;
+                }).catch(error => {
+                    console.log("再生に失敗しました。ファイルパスを確認してください。");
+                });
+            }
+            
+            // DOMContentLoadedが完了した時点で即座に再生処理を開始
+            startRingingImmediately();
+
+
+            // --- スライド機能のロジック ---
+            dragHandle.addEventListener('mousedown', startDrag);
+            dragHandle.addEventListener('touchstart', startDrag);
+
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('touchmove', drag);
+
+            document.addEventListener('mouseup', endDrag);
+            document.addEventListener('touchend', endDrag);
+
+            function startDrag(e) {
+                // スライド操作が始まるときにも再生を試みる（ブロック解除の確実性を高める）
+                startRingingOnInteraction(); 
+                
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                
+                isDragging = true;
+                startX = clientX - currentX;
+                
+                dragHandle.style.transition = 'none';
+                slideText.style.transition = 'opacity 0.2s ease, transform 0.2s ease'; 
+            }
+
+            function drag(e) {
+                if (!isDragging) return;
+
+                if (e.cancelable) e.preventDefault();
+
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const areaWidth = slideArea.clientWidth;
+                const iconWidth = dragHandle.clientWidth;
+                
+                let newX = clientX - startX; 
+
+                const minX = iconPadding;
+                const maxX = areaWidth - iconWidth - iconPadding; 
+
+                if (newX < minX) newX = minX;
+                if (newX > maxX) newX = maxX;
+                
+                currentX = newX;
+                
+                const iconMoveDistance = currentX - minX;
+                dragHandle.style.transform = `translateX(${iconMoveDistance}px)`; 
+                
+                const slideDistanceRatio = iconMoveDistance / (maxX - minX);
+                const textTranslate = initialTextShift * (1 - slideDistanceRatio);
+                slideText.style.transform = `translateX(${textTranslate}px)`;
+
+                slideText.style.opacity = 1 - (slideDistanceRatio * 0.8);
+            }
+
+            function endDrag() {
+                if (!isDragging) return;
+                isDragging = false;
+                
+                const areaWidth = slideArea.clientWidth;
+                const iconWidth = dragHandle.clientWidth;
+                const minX = iconPadding;
+                const maxX = areaWidth - iconWidth - iconPadding; 
+                
+                const completionThreshold = 0.85; 
+                const iconMoveDistance = currentX - minX;
+                const slideDistanceRatio = iconMoveDistance / (maxX - minX);
+
+                if (slideDistanceRatio >= completionThreshold) {
+                    // **応答成功**
+                    ringtone.pause();
+                    ringtone.currentTime = 0; 
+                    isRinging = false;
+                    
+                    screen.style.opacity = '0';
+                    screen.style.visibility = 'hidden';
+                    console.log('スライドで応答しました。');
+
+                } else {
+                    // **応答失敗**
+                    dragHandle.style.transition = 'transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                    dragHandle.style.transform = `translateX(0px)`;
+                    
+                    slideText.style.transform = `translateX(${initialTextShift}px)`; 
+                    slideText.style.opacity = 1; 
+
+                    currentX = minX; 
+                }
+            }
+        });
+    </script>
+</body>
+</html>
